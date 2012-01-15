@@ -99,7 +99,7 @@ module Gem
       else
         elapsed = Time.now - @start_time
         eta = elapsed * @total / @current - elapsed;
-        sprintf("ETA:  %s", format_time(eta))
+        sprintf("ETA:  %s (%d/%d)", format_time(eta), @current, @total)
       end
     end
 
