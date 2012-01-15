@@ -2,6 +2,12 @@ require 'yaml'
 require 'zlib'
 require 'fileutils'
 
+class String
+  def presence
+    empty? ? nil : self
+  end
+end
+
 module Gem
   VERSION = '1.8.11'.freeze
 
