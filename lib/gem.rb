@@ -15,7 +15,7 @@ module Gem
     attr_accessor :version, :prerelease
 
     def segments
-      @segments ||= version.split('.')
+      @segments ||= version.to_s.split('.')
     end
 
     def prerelease?
