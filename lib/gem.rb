@@ -186,6 +186,10 @@ module Gem
       @platform.to_s == "ruby" ? nil : @platform
     end
 
+    def basename
+      @basename ||= [name.to_s, version.version, platform.to_s.presence].compact.join '-'
+    end
+
     def authors
       @authors ||= []
     end
@@ -306,78 +310,95 @@ module Gem
     Zlib::Inflate.inflate data
   end
 
+  def self.[] name
+    name += ".gem" unless name[/.gem\Z/]
+    yaml = `tar -Oxf gems/#{name} metadata.gz | gunzip`
+    if not yaml.empty? and specification = YAML.load(yaml + "\n")
+      specification.for_cache!
+    end
+  end
+
+  def self.all
+    # If we have an index, run the block if given
+    @index.gems.each(&proc) if block_given? and @index
+
+    # Otherwise build the index and run the block for each built spec
+    @index ||= SourceIndex.new.tap do |index|
+      progress = nil
+      Dir.foreach("gems").select do |path|
+        path =~ /\.gem\Z/
+      end.tap do |names|
+        progress = ProgressBar.new("Loading index", names.length)
+      end.each do |name|
+        begin
+          if specification = self[name]
+            index.gems << specification
+            yield specification if block_given?
+          end
+          progress.inc
+        rescue Exception => e
+          puts "Failed to load gem #{name.inspect}: #{$!}", $!.inspect, $!.backtrace
+        end
+      end
+      progress.finish
+      puts "#{index.gems.length} gems loaded into index"
+      index.gems.sort!
+    end
+  end
+
+  def self.quick_index specification
+    File.write("quick/#{specification.basename}.gemspec.rz", Zlib.deflate(YAML.dump(specification)))
+    File.write("quick/Marshal.#{marshal_version}/#{specification.basename}.gemspec.rz", Zlib.deflate(Marshal.dump(specification)))
+  end
+
   def self.index
     puts "Quick paths"
     FileUtils.mkdir_p "quick"
     FileUtils.mkdir_p "quick/Marshal.#{marshal_version}"
 
-    index = SourceIndex.new
-    progress = ProgressBar.new "Quick index", File.stat("gems").nlink - 2
-    Dir.foreach("gems").select { |path| path =~ /\.gem\Z/}.each do |path|
-      begin
-        #puts path
-        progress.inc
-        yaml = `tar -Oxf gems/#{path} metadata.gz | gunzip`
-        next if yaml.empty?
-
-        if specification = YAML.load(yaml + "\n")
-          specification.for_cache!
-          File.write("quick/#{specification.name}-#{specification.version.version}.gemspec.rz", Zlib.deflate(YAML.dump(specification)))
-          File.write("quick/Marshal.#{marshal_version}/#{specification.name}-#{specification.version.version}.gemspec.rz", Zlib.deflate(Marshal.dump(specification)))
-          index.gems << specification
-        end
-      rescue Exception => e
-        puts "Failed: #{$!}", $!.inspect, $!.backtrace
-      end
-    end
-    progress.finish
-
-    puts "#{index.gems.length} gems loaded into index"
-
-    index.gems.sort!
+    all(&method(:quick_index))
 
     puts "Marshal index"
-    Marshal.dump(index, File.open("Marshal.#{marshal_version}", "w"))
-    File.write("Marshal.#{marshal_version}.Z", Zlib.deflate(File.read("Marshal.#{marshal_version}")))
+    File.write("Marshal.#{marshal_version}.Z", Zlib.deflate(Marshal.dump(all.gems.map { |spec| [spec.basename, spec] })))
 
-    # Looks like this is deprecated. On rubygems.org, only contains a
-    # reference to rubygems-update, suggesting the user should update.
+    # deprecated: Marshal.dump(all, File.open("Marshal.#{marshal_version}", "w"))
+
+    # deprecated:
+    #puts "Quick index"
+    #File.open('quick/index', 'w') do |quick_index|
+    #  all.gems.each do |specification|
+    #    quick_index.write("#{specification.name.to_s}-#{specification.version.version}\n")
+    #  end
+    #end
+
+    # deprecated:
     #puts "Master index"
-    #YAML.dump(index, File.open("yaml", "w"))
+    #YAML.dump(all, File.open("yaml", "w"))
     #File.write("yaml.Z", Zlib.deflate(File.read("yaml")))
 
-    puts "Quick index"
-    File.open('quick/index', 'w') do |quick_index|
-      index.gems.each do |specification|
-        quick_index.write("#{specification.name.to_s}-#{specification.version.version}\n")
-      end
-    end
+    # un-gzipped indexes are deprecated, so generate gzipped directly:
 
     puts "specs"
-    Marshal.dump(index.gems.reject(&:prerelease?).map do |specification|
+    Marshal.dump(all.gems.reject(&:prerelease?).map do |specification|
       platform = specification.platform
       platform = "ruby" if platform.nil? or platform.empty?
       [specification.name, specification.version, platform]
-    end, File.open("specs.#{marshal_version}", 'w'))
+    end, IO.popen("gzip -c > specs.#{marshal_version}.gz", "w"))
 
     puts "lastest_specs"
-    Marshal.dump(index.gems.group_by(&:name).map do |name, specifications|
+    Marshal.dump(all.gems.group_by(&:name).map do |name, specifications|
       specification = specifications.reject(&:prerelease?).last
       platform = specification.platform
       platform = "ruby" if platform.nil? or platform.empty?
       [specification.name, specification.version, platform]
-    end, File.open("latest_specs.#{marshal_version}", 'w'))
+    end, IO.popen("gzip -c > latest_specs.#{marshal_version}.gz", "w"))
 
     puts "prerelease_specs"
-    Marshal.dump(index.gems.select(&:prerelease?).map do |specification|
+    Marshal.dump(all.gems.select(&:prerelease?).map do |specification|
       platform = specification.platform
       platform = "ruby" if platform.nil? or platform.empty?
       [specification.name, specification.version, platform]
-    end, File.open("prerelease_specs.#{marshal_version}", 'w'))
-
-    ['', 'latest_', 'prerelease_'].each do |prefix|
-      `gzip -c #{prefix}specs.#{marshal_version} > #{prefix}specs.#{marshal_version}.gz`
-    end
+    end, IO.popen("gzip -c > prerelease_specs.#{marshal_version}.gz", "w"))
 
     # TODO: index.rss
   end
