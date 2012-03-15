@@ -391,6 +391,34 @@ module Gem
 
     # TODO: index.rss
   end
+
+  def self.mirror
+    print "#{File.exist? "specs.#{marshal_version}.gz" and "Updating" or "Fetching"} specification... "
+    system "wget --quiet --timestamping --continue http://production.cf.rubygems.org/{,latest_,prerelease_}specs.#{marshal_version}.gz" or
+      (puts "error!"; raise StandardError, "Unable to fetch specifications.")
+    puts "done."
+    FileUtils.mkdir_p "gems"
+    progress = nil
+    Marshal.load(IO.popen("gunzip -c specs.#{marshal_version}.gz", "r", err: nil)).tap do |specs|
+      progress = ProgressBar.new("Mirroring gems", specs.length)
+    end.each do |name, version, platform|
+      begin
+        specification = Gem::Specification.new name: name, version: version, platform: platform
+        path = "gems/#{specification.basename}.gem"
+        unless File.exist? path and self[specification.basename]
+          system "wget --quiet --timestamping --continue --directory-prefix=gems http://production.cf.rubygems.org/#{path}" or
+            raise StandardError, "Couldn't fetch #{url}"
+        end
+      rescue StandardError
+        puts "Failed to mirror gem #{name.inspect}: #{$!}", $!.inspect, $!.backtrace
+      end
+      progress.inc
+    end
+    progress.finish
+    puts "#{`ls gems | wc -l`} gems mirrored."
+
+    index
+  end
 end
 
 require 'gem/progressbar'
