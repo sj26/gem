@@ -24,7 +24,7 @@ module Gem
       @finished_p = false
       @start_time = Time.now
       @previous_time = @start_time
-      @format = "%s... %3d%% %s %s"
+      @format = "%s %3d%% %s %s"
       @format_arguments = [:title, :percentage, :bar, :stat]
       clear
       show

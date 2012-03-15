@@ -392,32 +392,60 @@ module Gem
     # TODO: index.rss
   end
 
-  def self.mirror
+  def self.mirror source="http://rubygems.org"
     print "#{File.exist? "specs.#{marshal_version}.gz" and "Updating" or "Fetching"} specification... "
-    system "wget --quiet --timestamping --continue http://production.cf.rubygems.org/{,latest_,prerelease_}specs.#{marshal_version}.gz" or
-      (puts "error!"; raise StandardError, "Unable to fetch specifications.")
+    ["specs", "latest_specs", "prerelease_specs"].map do |specs_name|
+      "#{source}/#{specs_name}.#{marshal_version}.gz"
+    end.each do |url|
+      system %{wget --quiet --timestamping --continue #{shellescape url}} or
+        (puts "error!"; raise StandardError, "Unable to fetch specifications")
+    end
     puts "done."
     FileUtils.mkdir_p "gems"
     progress = nil
-    Marshal.load(IO.popen("gunzip -c specs.#{marshal_version}.gz", "r", err: nil)).tap do |specs|
-      progress = ProgressBar.new("Mirroring gems", specs.length)
-    end.each do |name, version, platform|
-      begin
-        specification = Gem::Specification.new name: name, version: version, platform: platform
-        path = "gems/#{specification.basename}.gem"
-        unless File.exist? path and self[specification.basename]
-          system "wget --quiet --timestamping --continue --directory-prefix=gems http://production.cf.rubygems.org/#{path}" or
-            raise StandardError, "Couldn't fetch #{url}"
+    ["latest_specs", "specs", "prerelease_specs"].each do |specs_name|
+      Marshal.load(IO.popen("gunzip -c #{specs_name}.#{marshal_version}.gz", "r", err: nil)).tap do |specs|
+        progress = ProgressBar.new("Mirroring #{specs_name.gsub('_', ' ')}", specs.length)
+      end.each do |name, version, platform|
+        begin
+          specification = Gem::Specification.new name: name, version: version, platform: platform
+          path = "gems/#{specification.basename}.gem"
+          unless File.exist? path and self[specification.basename]
+            url = "#{source}/#{path}"
+            system %{wget --quiet --timestamping --continue --directory-prefix=gems #{shellescape url}} or
+              raise StandardError, "Couldn't fetch #{url}"
+            progress.clear
+            puts specification.basename
+          end
+        rescue StandardError
+          puts "Failed to mirror gem #{name.inspect}: #{$!}", $!.inspect, $!.backtrace
         end
-      rescue StandardError
-        puts "Failed to mirror gem #{name.inspect}: #{$!}", $!.inspect, $!.backtrace
+        progress.inc
       end
-      progress.inc
+      progress.finish
     end
-    progress.finish
     puts "#{`ls gems | wc -l`} gems mirrored."
 
     index
+  end
+
+protected
+
+  def self.shellescape(str)
+    # An empty argument will be skipped, so return empty quotes.
+    return "''" if str.empty?
+
+    str = str.dup
+
+    # Process as a single byte sequence because not all shell
+    # implementations are multibyte aware.
+    str.gsub!(/([^A-Za-z0-9_\-.,:\/@\n])/n, "\\\\\\1")
+
+    # A LF cannot be escaped with a backslash because a backslash + LF
+    # combo is regarded as line continuation and simply ignored.
+    str.gsub!(/\n/, "'\n'")
+
+    return str
   end
 end
 
