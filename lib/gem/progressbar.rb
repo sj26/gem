@@ -29,9 +29,7 @@ module Gem
       clear
       show
     end
-    attr_reader   :title
-    attr_reader   :current
-    attr_reader   :total
+    attr_reader :title, :current, :total
     attr_accessor :start_time
 
     private

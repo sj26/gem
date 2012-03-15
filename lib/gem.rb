@@ -1,308 +1,27 @@
+require 'fileutils'
 require 'yaml'
 require 'zlib'
-require 'fileutils'
-
-class String
-  def presence
-    empty? ? nil : self
-  end
-end
 
 module Gem
   VERSION = '1.8.11'.freeze
 
-  class Version
-    attr_accessor :version, :prerelease
-
-    def segments
-      @segments ||= version.to_s.split('.')
+  def self.[] name, version=nil, platform=nil
+    name.gsub! /\.gem\Z/, ""
+    if version.nil?
+      versions = Dir[File.join(path, "cache", "#{name}-*.gem")].map do |filename|
+        File.basename(filename)
+      end.map do |basename|
+        basename.slice(name.length + 1, basename.length - name.length - 1 - 4)
+      end.map do |version|
+        Gem::Version.new version
+      end.reject(&:prerelease?).sort
+      version = versions.last.to_s unless versions.empty?
     end
 
-    def prerelease?
-      @prerelease ||= @version =~ /[a-zA-Z]/
-    end
+    specification = Specification.new name, version, platform
+    filename = File.join path, "cache", "#{specification.basename}.gem"
 
-    def <=> other
-      return unless self.class === other
-      return 0 if version == other.version
-
-      lhsegments = segments
-      rhsegments = other.segments
-
-      lhsize = lhsegments.size
-      rhsize = rhsegments.size
-      limit  = (lhsize > rhsize ? lhsize : rhsize) - 1
-
-      i = 0
-
-      while i <= limit
-        lhs, rhs = lhsegments[i] || 0, rhsegments[i] || 0
-        i += 1
-
-        next      if lhs == rhs
-        return -1 if String  === lhs && Numeric === rhs
-        return  1 if Numeric === lhs && String  === rhs
-
-        return lhs <=> rhs
-      end
-
-      return 0
-    end
-
-    def marshal_dump
-      [version]
-    end
-
-    def marshal_load args
-      @version = args.first
-    end
-
-    def to_yaml_properties
-      [:@version]
-    end
-  end
-
-  class Requirement
-    attr_accessor :none, :requirements
-  end
-
-  Version::Requirement = Requirement
-
-  class Dependency
-  end
-
-  class Platform
-    RUBY = 'ruby'
-
-    attr_accessor :cpu
-    attr_accessor :os
-    attr_accessor :version
-
-    def initialize arch
-      case arch
-      when Array then
-        @cpu, @os, @version = arch
-      when String then
-        arch = arch.split '-'
-
-        if arch.length > 2 and arch.last !~ /\d/ then # reassemble x86-linux-gnu
-          extra = arch.pop
-          arch.last << "-#{extra}"
-        end
-
-        cpu = arch.shift
-
-        @cpu = case cpu
-           when /i\d86/ then 'x86'
-           else cpu
-         end
-
-        if arch.length == 2 and arch.last =~ /^\d+(\.\d+)?$/ then # for command-line
-          @os, @version = arch
-          return
-        end
-
-        os, = arch
-        @cpu, os = nil, cpu if os.nil? # legacy jruby
-
-        @os, @version = case os
-          when /aix(\d+)/ then             ['aix',       $1 ]
-          when /cygwin/ then               ['cygwin',    nil]
-          when /darwin(\d+)?/ then         ['darwin',    $1 ]
-          when /freebsd(\d+)/ then         ['freebsd',   $1 ]
-          when /hpux(\d+)/ then            ['hpux',      $1 ]
-          when /^java$/, /^jruby$/ then    ['java',      nil]
-          when /^java([\d.]*)/ then        ['java',      $1 ]
-          when /^dotnet$/ then             ['dotnet',    nil]
-          when /^dotnet([\d.]*)/ then      ['dotnet',    $1 ]
-          when /linux/ then                ['linux',     $1 ]
-          when /mingw32/ then              ['mingw32',   nil]
-          when /(mswin\d+)(\_(\d+))?/ then
-            os, version = $1, $3
-            @cpu = 'x86' if @cpu.nil? and os =~ /32$/
-            [os, version]
-          when /netbsdelf/ then            ['netbsdelf', nil]
-          when /openbsd(\d+\.\d+)/ then    ['openbsd',   $1 ]
-          when /solaris(\d+\.\d+)/ then    ['solaris',   $1 ]
-          # test
-          when /^(\w+_platform)(\d+)/ then [$1,          $2 ]
-          else                             ['unknown',   nil]
-        end
-      when Gem::Platform then
-        @cpu = arch.cpu
-        @os = arch.os
-        @version = arch.version
-      else
-        raise ArgumentError, "invalid argument #{arch.inspect}"
-      end
-    end
-
-    def to_a
-      [@cpu, @os, @version]
-    end
-
-    def to_s
-      to_a.compact.join '-'
-    end
-
-    def empty?
-      to_s.empty?
-    end
-  end
-
-  class Specification
-    attr_accessor :authors, :autorequire, :bindir, :default_executable, :dependencies,
-      :description, :email, :executables, :extensions, :extra_rdoc_files, :files,
-      :has_rdoc, :homepage, :licenses, :name, :platform, :rdoc_options, :require_paths,
-      :required_ruby_version, :required_rubygems_version, :requirements,
-      :rubyforge_project, :rubygems_version, :summary, :test_files, :version
-
-    def initialize *args
-      options = args.pop if args.last.is_a? Hash
-      options ||= {}
-
-      self.name = args.shift if args.first.is_a? String
-      self.version = args.shift if args.first.is_a? String or args.first.is_a? Gem::Version
-
-      raise ArgumentError, "Too many arguments" unless args.empty?
-
-      options.each do |key, value|
-        send "#{key}=", value
-      end
-    end
-
-    def prerelease?
-      version.is_a? Version and version.prerelease?
-    end
-
-    def platform
-      @platform.to_s == "ruby" ? nil : @platform
-    end
-
-    def basename
-      @basename ||= [name.to_s, version.version, platform.to_s.presence].compact.join '-'
-    end
-
-    def authors
-      @authors ||= []
-    end
-
-    def author
-      authors.first
-    end
-
-    def author= value
-      self.authors = [value]
-    end
-
-    def licenses
-      @licenses ||= []
-    end
-
-    def license
-      licenses.first
-    end
-
-    def license= value
-      licenses[0] = value
-    end
-
-    def date
-      @date ||= Time.utc(today.year, today.month, today.day)
-    end
-
-    def rubygems_version
-      @rubygems_version ||= Gem::VERSION
-    end
-
-    def specification_version
-      3
-    end
-
-    def <=> other
-      [name.to_s, version, platform == "ruby" ? -1 : 1] <=> [other.name.to_s, other.version, other.platform == "ruby" ? -1 : 1]
-    end
-
-    def _dump limit=-1
-      Marshal.dump [
-        # This order is important
-        rubygems_version,
-        specification_version,
-        name,
-        version,
-        date,
-        summary,
-        required_ruby_version,
-        required_rubygems_version,
-        platform,
-        dependencies,
-        rubyforge_project,
-        email,
-        authors,
-        description,
-        homepage,
-        has_rdoc,
-        platform,
-        licenses
-      ]
-    end
-
-    def self._load data
-      marshalled = Marshal.load data
-
-      new.tap do |spec|
-        # This order is important
-        spec.rubygems_version,
-        spec.specification_version,
-        spec.name,
-        spec.version,
-        spec.date,
-        spec.summary,
-        spec.required_ruby_version,
-        spec.required_rubygems_version,
-        spec.platform,
-        spec.dependencies,
-        spec.rubyforge_project,
-        spec.email,
-        spec.authors,
-        spec.description,
-        spec.homepage,
-        spec.has_rdoc,
-        spec.platform,
-        spec.licenses = marshalled
-      end
-    end
-
-    def for_cache
-      dup.for_cache!
-    end
-
-    def for_cache!
-      tap do
-        @files = nil
-        @test_files = nil
-      end
-    end
-  end
-
-  class SourceIndex
-    attr_accessor :gems
-
-    def gems
-      @gems ||= []
-    end
-  end
-
-  def self.marshal_version
-    "#{Marshal::MAJOR_VERSION}.#{Marshal::MINOR_VERSION}"
-  end
-
-  def self.[] name
-    name += ".gem" unless name[/.gem\Z/]
-    yaml = `tar -Oxf gems/#{name} metadata.gz | gunzip`
-    if not yaml.empty? and specification = YAML.load(yaml + "\n")
-      specification.for_cache!
-    end
+    Specification.from_gem filename
   end
 
   def self.all
@@ -318,7 +37,7 @@ module Gem
         progress = ProgressBar.new("Loading index", names.length)
       end.each do |name|
         begin
-          if specification = self[name]
+          if specification = self[name].for_cache!
             index.gems << specification
             yield specification if block_given?
           end
@@ -392,7 +111,7 @@ module Gem
     # TODO: index.rss
   end
 
-  def self.mirror source="http://rubygems.org"
+  def self.mirror source=source
     print "#{File.exist? "specs.#{marshal_version}.gz" and "Updating" or "Fetching"} specification... "
     ["specs", "latest_specs", "prerelease_specs"].map do |specs_name|
       "#{source}/#{specs_name}.#{marshal_version}.gz"
@@ -410,43 +129,46 @@ module Gem
         begin
           specification = Gem::Specification.new name: name, version: version, platform: platform
           path = "gems/#{specification.basename}.gem"
-          unless File.exist? path and self[specification.basename]
+          unless File.exist? path and Gem::Specification.from_file path
             url = "#{source}/#{path}"
             system %{wget --quiet --timestamping --continue --directory-prefix=gems #{shellescape url}} or
               raise StandardError, "Couldn't fetch #{url}"
-            progress.clear
-            puts specification.basename
           end
         rescue StandardError
+          progress.clear
           puts "Failed to mirror gem #{name.inspect}: #{$!}", $!.inspect, $!.backtrace
         end
         progress.inc
       end
       progress.finish
     end
-    puts "#{`ls gems | wc -l`} gems mirrored."
-
+    puts "#{`/bin/ls -1f | wc -l`.to_i - 2} gems mirrored."
     index
   end
 
 protected
 
-  def self.shellescape(str)
-    # An empty argument will be skipped, so return empty quotes.
-    return "''" if str.empty?
+  def self.shellescape arg
+    if not arg.is_a? String
+      arg.to_s
+    else
+      arg.dup
+    end.tap do |arg|
+      # Process as a single byte sequence because not all shell
+      # implementations are multibyte aware.
+      str.gsub!(/([^A-Za-z0-9_\-.,:\/@\n])/n, "\\\\\\1")
 
-    str = str.dup
-
-    # Process as a single byte sequence because not all shell
-    # implementations are multibyte aware.
-    str.gsub!(/([^A-Za-z0-9_\-.,:\/@\n])/n, "\\\\\\1")
-
-    # A LF cannot be escaped with a backslash because a backslash + LF
-    # combo is regarded as line continuation and simply ignored.
-    str.gsub!(/\n/, "'\n'")
-
-    return str
+      # A LF cannot be escaped with a backslash because a backslash + LF
+      # combo is regarded as line continuation and simply ignored.
+      str.gsub!(/\n/, "'\n'")
+    end
   end
 end
 
+require 'gem/configuration'
+require 'gem/version'
+require 'gem/requirement'
+require 'gem/dependency'
+require 'gem/platform'
+require 'gem/specification'
 require 'gem/progressbar'
