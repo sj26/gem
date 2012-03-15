@@ -35,8 +35,7 @@ Given the following definitions:
 
 Proposed directory structure:
 
- * `cache/` — a cache of installed gems, backwards compatible.
-   * `<basename>.gem` — the gem ball.
+ * `cache/` -> `gems/` — a symlink for old gemball location, backwards compat only.
  * `index/` — index of gemspecs.
    * All gemspec indexes are stored as simple tuples, `[[<name>, <version>, <platform>[, <yanked?>]]+]`
      * Journalled (append-only).
@@ -56,7 +55,8 @@ Proposed directory structure:
    * `<source-sha>/` — SHA of source URL (i.e. `http://rubygems.org`)
      * `index/` — a cache of the top-level index/ for a particular source
  * `gems/` — installed gems, backwards compatible.
-   * `<basename>` — the unpacked gem tree
+   * `<basename>.gem` — the gem ball
+   * `<basename>/` — the unpacked gem tree
  * `specifications/` — gem specifications of installed gems, backwards compatible.
    * `<basename>.gemspec` — ruby format, without file/test lists
 
