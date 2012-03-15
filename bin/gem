@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby -I ../lib
+
+require 'gem'
+
+raise ArgumentError, "Bad command" unless Gem.respond_to? ARGV.first
+
+Gem.public_send ARGV.shift, *ARGV
