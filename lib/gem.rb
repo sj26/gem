@@ -151,32 +151,25 @@ module Gem
   end
 
   class Specification
-    attr_accessor :authors
-    attr_accessor :autorequire
-    attr_accessor :bindir
-    attr_accessor :default_executable
-    attr_accessor :dependencies
-    attr_accessor :description
-    attr_accessor :email
-    attr_accessor :executables
-    attr_accessor :extensions
-    attr_accessor :extra_rdoc_files
-    attr_accessor :files
-    attr_accessor :has_rdoc
-    attr_accessor :homepage
-    attr_accessor :licenses
-    attr_accessor :name
-    attr_accessor :platform
-    attr_accessor :rdoc_options
-    attr_accessor :require_paths
-    attr_accessor :required_ruby_version
-    attr_accessor :required_rubygems_version
-    attr_accessor :requirements
-    attr_accessor :rubyforge_project
-    attr_accessor :rubygems_version
-    attr_accessor :summary
-    attr_accessor :test_files
-    attr_accessor :version
+    attr_accessor :authors, :autorequire, :bindir, :default_executable, :dependencies,
+      :description, :email, :executables, :extensions, :extra_rdoc_files, :files,
+      :has_rdoc, :homepage, :licenses, :name, :platform, :rdoc_options, :require_paths,
+      :required_ruby_version, :required_rubygems_version, :requirements,
+      :rubyforge_project, :rubygems_version, :summary, :test_files, :version
+
+    def initialize *args
+      options = args.pop if args.last.is_a? Hash
+      options ||= {}
+
+      self.name = args.shift if args.first.is_a? String
+      self.version = args.shift if args.first.is_a? String or args.first.is_a? Gem::Version
+
+      raise ArgumentError, "Too many arguments" unless args.empty?
+
+      options.each do |key, value|
+        send "#{key}=", value
+      end
+    end
 
     def prerelease?
       version.is_a? Version and version.prerelease?
@@ -199,7 +192,7 @@ module Gem
     end
 
     def author= value
-      authors[0] = value
+      self.authors = [value]
     end
 
     def licenses
@@ -232,6 +225,7 @@ module Gem
 
     def _dump limit=-1
       Marshal.dump [
+        # This order is important
         rubygems_version,
         specification_version,
         name,
@@ -257,6 +251,7 @@ module Gem
       marshalled = Marshal.load data
 
       new.tap do |spec|
+        # This order is important
         spec.rubygems_version,
         spec.specification_version,
         spec.name,
@@ -302,14 +297,6 @@ module Gem
     "#{Marshal::MAJOR_VERSION}.#{Marshal::MINOR_VERSION}"
   end
 
-  def self.deflate data
-    Zlib::Deflate.deflate data
-  end
-
-  def self.inflate data
-    Zlib::Inflate.inflate data
-  end
-
   def self.[] name
     name += ".gem" unless name[/.gem\Z/]
     yaml = `tar -Oxf gems/#{name} metadata.gz | gunzip`
@@ -335,10 +322,10 @@ module Gem
             index.gems << specification
             yield specification if block_given?
           end
-          progress.inc
-        rescue Exception => e
+        rescue StandardError
           puts "Failed to load gem #{name.inspect}: #{$!}", $!.inspect, $!.backtrace
         end
+        progress.inc
       end
       progress.finish
       puts "#{index.gems.length} gems loaded into index"
@@ -352,14 +339,13 @@ module Gem
   end
 
   def self.index
-    puts "Quick paths"
-    FileUtils.mkdir_p "quick"
     FileUtils.mkdir_p "quick/Marshal.#{marshal_version}"
 
     all(&method(:quick_index))
 
-    puts "Marshal index"
+    print "Marshal index... "
     File.write("Marshal.#{marshal_version}.Z", Zlib.deflate(Marshal.dump(all.gems.map { |spec| [spec.basename, spec] })))
+    puts "done."
 
     # deprecated: Marshal.dump(all, File.open("Marshal.#{marshal_version}", "w"))
 
@@ -378,27 +364,30 @@ module Gem
 
     # un-gzipped indexes are deprecated, so generate gzipped directly:
 
-    puts "specs"
+    print "Writing specs... "
     Marshal.dump(all.gems.reject(&:prerelease?).map do |specification|
       platform = specification.platform
       platform = "ruby" if platform.nil? or platform.empty?
       [specification.name, specification.version, platform]
-    end, IO.popen("gzip -c > specs.#{marshal_version}.gz", "w"))
+    end, IO.popen("gzip -c > specs.#{marshal_version}.gz", "w", err: nil))
+    puts "done."
 
-    puts "lastest_specs"
+    print "Writing lastest_specs... "
     Marshal.dump(all.gems.group_by(&:name).map do |name, specifications|
       specification = specifications.reject(&:prerelease?).last
       platform = specification.platform
       platform = "ruby" if platform.nil? or platform.empty?
       [specification.name, specification.version, platform]
-    end, IO.popen("gzip -c > latest_specs.#{marshal_version}.gz", "w"))
+    end, IO.popen("gzip -c > latest_specs.#{marshal_version}.gz", "w", err: nil))
+    puts "done."
 
-    puts "prerelease_specs"
+    print "Writing prerelease_specs... "
     Marshal.dump(all.gems.select(&:prerelease?).map do |specification|
       platform = specification.platform
       platform = "ruby" if platform.nil? or platform.empty?
       [specification.name, specification.version, platform]
-    end, IO.popen("gzip -c > prerelease_specs.#{marshal_version}.gz", "w"))
+    end, IO.popen("gzip -c > prerelease_specs.#{marshal_version}.gz", "w", err: nil))
+    puts "done."
 
     # TODO: index.rss
   end

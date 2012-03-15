@@ -24,8 +24,7 @@ module Gem
       @finished_p = false
       @start_time = Time.now
       @previous_time = @start_time
-      @title_width = 14
-      @format = "%-#{@title_width}s %3d%% %s %s"
+      @format = "%s... %3d%% %s %s"
       @format_arguments = [:title, :percentage, :bar, :stat]
       clear
       show
@@ -60,7 +59,7 @@ module Gem
     end
 
     def fmt_title
-      @title[0,(@title_width - 1)] + ":"
+      @title + "..."
     end
 
     def convert_bytes (bytes)
