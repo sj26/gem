@@ -22,6 +22,7 @@ module Gem
       @current = 0
       @previous = 0
       @finished_p = false
+      @synchronized = false
       @start_time = Time.now
       @previous_time = @start_time
       @format = "%s %3d%% %s %s"
@@ -30,9 +31,39 @@ module Gem
       show
     end
     attr_reader :title, :current, :total
-    attr_accessor :start_time
+    attr_accessor :start_time, :synchronized
+
+    def synchronized= value
+      @synchronized = value.tap do
+        @mutex = (@mutex || Mutex.new if value)
+      end
+    end
+
+    def synchronized!
+      tap { self.synchronized = true }
+    end
 
     private
+    def synchronize &block
+      if synchronized
+        @mutex.synchronize(&block)
+      else
+        block.call
+      end
+    end
+
+    def self.synchronize *symbols
+      symbols.each do |symbol|
+        symbol_without_synchronize = :"#{symbol}_without_synchronize"
+        alias_method symbol_without_synchronize, symbol
+        define_method symbol do |*args, &block|
+          synchronize do
+            send symbol_without_synchronize, *args, &block
+          end
+        end
+      end
+    end
+
     def fmt_bar
       bar_width = do_percentage * @terminal_width / 100
       sprintf("8%sD%s",
@@ -154,6 +185,7 @@ module Gem
       end
       @previous_time = Time.now
     end
+    synchronize :show
 
     def show_if_needed
       if @total.zero?
@@ -177,6 +209,15 @@ module Gem
       @out.print(" " * (get_width - 1))
       @out.print "\r"
     end
+    synchronize :clear
+
+    # puts making sure the progressbar doesn't get in the way
+    def puts *args
+      clear
+      @out.puts *args
+      show
+    end
+    synchronize :puts
 
     def finish
       @current = @total

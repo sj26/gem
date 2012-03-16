@@ -47,7 +47,7 @@ Proposed directory structure:
      * `specs.json[.gz]` — index of gemspecs for a gem name (for complex requirement resolution)
      * `latest_specs.json[.gz]` — latest gemspec for each platform for a gem name (`gem install <name>`)
      * `prerelease_specs.json[.gz]` — latest prerelease gemspec for each platform for a gem name (`gem install —prerelease <name>`)
-     * eventually, we might need to replicate by version segment for targeted requirements if it would provide efficiency gains—gems with many semantic versions, etc:
+     * eventually, we might need to replicate by version segment for targeted requirements if it would provide efficiency gains — gems with many semantic versions, etc:
        `version-<version-prefix>/{specs,latest_specs,prerelease_specs}.json.gz`
      * could also introduce something for platform, ala:
        `version-<version-prefix>/]platform-<platform>/`

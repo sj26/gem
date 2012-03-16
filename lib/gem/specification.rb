@@ -14,6 +14,14 @@ class Gem::Specification
     specification = YAML.load(yaml + "\n") unless yaml.empty?
   end
 
+  def self.try_from_gem path
+    begin
+      from_gem path
+    # XXX: YAML throws `SyntaxError`s (eek!)
+    rescue Exception
+    end
+  end
+
   @@capture = false
 
   def self.from_gemspec path

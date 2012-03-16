@@ -5,6 +5,12 @@ require 'zlib'
 module Gem
   VERSION = '1.8.11'.freeze
 
+  # XXX: Find methods not implemented yet
+  def self.method_missing symbol, *args
+    # XXX: WHUT, why doesn't "[athing]"[1, -1] not give "athing"? Grr.
+    puts "TODO: #{name}.#{symbol}(#{args.inspect.tap { |s| s.slice!(0, 1); s.slice!(-1) } })"
+  end
+
   def self.[] name, version=nil, platform=nil
     name.gsub! /\.gem\Z/, ""
     if version.nil?
@@ -13,7 +19,7 @@ module Gem
       end.map do |basename|
         basename.slice(name.length + 1, basename.length - name.length - 1 - 4)
       end.map do |version|
-        Gem::Version.new version
+        Version.new version
       end.reject(&:prerelease?).sort
       version = versions.last.to_s unless versions.empty?
     end
@@ -112,31 +118,36 @@ module Gem
   end
 
   def self.mirror source=source
-    print "#{File.exist? "specs.#{marshal_version}.gz" and "Updating" or "Fetching"} specification... "
+    print "#{File.exist? "specs.#{marshal_version}.gz" and "Updating" or "Fetching"} specifications... "
     ["specs", "latest_specs", "prerelease_specs"].map do |specs_name|
       "#{source}/#{specs_name}.#{marshal_version}.gz"
     end.each do |url|
-      system %{wget --quiet --timestamping --continue #{shellescape url}} or
+      # XXX: `--retry-connrefused`: HKG might reconnect occasionally
+      system %{wget --quiet --timestamping --continue --retry-connrefused #{shellescape url}} or
         (puts "error!"; raise StandardError, "Unable to fetch specifications")
     end
     puts "done."
     FileUtils.mkdir_p "gems"
     progress = nil
     ["latest_specs", "specs", "prerelease_specs"].each do |specs_name|
-      Marshal.load(IO.popen("gunzip -c #{specs_name}.#{marshal_version}.gz", "r", err: nil)).tap do |specs|
-        progress = ProgressBar.new("Mirroring #{specs_name.gsub('_', ' ')}", specs.length)
-      end.each do |name, version, platform|
+      Marshal.load(IO.popen("gunzip -c #{specs_name}.#{marshal_version}.gz", "r", err: nil)).tap do |tuples|
+        progress = ProgressBar.new("Mirroring #{specs_name.gsub('_', ' ')}", tuples.length)
+      end.to_enum.in_thread_pool(of: 8) do |tuple|
+        name, version, platform = tuple
         begin
-          specification = Gem::Specification.new name: name, version: version, platform: platform
+          specification = Specification.new name: name, version: version, platform: platform
           path = "gems/#{specification.basename}.gem"
-          unless File.exist? path and Gem::Specification.from_file path
+          unless File.exist? path and Specification.try_from_gem(path)
             url = "#{source}/#{path}"
-            system %{wget --quiet --timestamping --continue --directory-prefix=gems #{shellescape url}} or
+            # XXX: `--retry-connrefused`: HKG might reconnect occasionally
+            system %{wget --quiet --timestamping --continue --retry-connrefused --directory-prefix=gems #{shellescape url}} or
               raise StandardError, "Couldn't fetch #{url}"
+            progress.puts specification.basename
+            # XXX: HKG doesn't like too much traffic
+            sleep 1
           end
         rescue StandardError
-          progress.clear
-          puts "Failed to mirror gem #{name.inspect}: #{$!}", $!.inspect, $!.backtrace
+          progress.puts "Failed to mirror gem #{name.inspect}: #{$!}", $!.inspect, $!.backtrace
         end
         progress.inc
       end
@@ -165,6 +176,7 @@ protected
   end
 end
 
+require 'gem/thread_poolable'
 require 'gem/configuration'
 require 'gem/version'
 require 'gem/requirement'
