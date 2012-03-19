@@ -96,7 +96,7 @@ module Gem
       platform = specification.platform
       platform = "ruby" if platform.nil? or platform.empty?
       [specification.name, specification.version, platform]
-    end, IO.popen("gzip -c > specs.#{marshal_version}.gz", "w", err: nil))
+    end, Zlib::GzipWriter.new(File.open("specs.#{marshal_version}.gz", "w")))
     puts "done."
 
     print "Writing lastest_specs... "
@@ -105,7 +105,7 @@ module Gem
       platform = specification.platform
       platform = "ruby" if platform.nil? or platform.empty?
       [specification.name, specification.version, platform]
-    end, IO.popen("gzip -c > latest_specs.#{marshal_version}.gz", "w", err: nil))
+    end, Zlib::GzipWriter.new(File.open("latest_specs.#{marshal_version}.gz", "w")))
     puts "done."
 
     print "Writing prerelease_specs... "
@@ -113,7 +113,7 @@ module Gem
       platform = specification.platform
       platform = "ruby" if platform.nil? or platform.empty?
       [specification.name, specification.version, platform]
-    end, IO.popen("gzip -c > prerelease_specs.#{marshal_version}.gz", "w", err: nil))
+    end, Zlib::GzipWriter.new(File.open("prerelease_specs.#{marshal_version}.gz", "w")))
     puts "done."
 
     # TODO: index.rss

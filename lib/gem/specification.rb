@@ -1,4 +1,5 @@
 require 'yaml'
+require 'zlib'
 
 class Gem::Specification
   include Comparable
@@ -10,8 +11,7 @@ class Gem::Specification
     :rubygems_version, :specification_version, :summary, :test_files, :version
 
   def self.from_gem path
-    yaml = `tar -Oxf #{Gem.shellescape path} metadata.gz | gunzip`
-    specification = YAML.load(yaml + "\n") unless yaml.empty?
+    YAML.load_stream(Zlib::GzipReader.new(IO.popen("tar -Oxf #{Gem.shellescape path} metadata.gz", "r"))) rescue nil
   end
 
   def self.try_from_gem path
