@@ -1,4 +1,6 @@
 require 'fileutils'
+require 'net/http/persistent'
+require 'time'
 require 'yaml'
 require 'zlib'
 
@@ -118,12 +120,45 @@ module Gem
   end
 
   def self.mirror source=source
+    http = Net::HTTP::Persistent.new "gem-mirror"
     print "#{File.exist? "specs.#{marshal_version}.gz" and "Updating" or "Fetching"} specifications... "
-    ["specs", "latest_specs", "prerelease_specs"].map do |specs_name|
-      "#{source}/#{specs_name}.#{marshal_version}.gz"
-    end.in_threads do |url|
-      system %{wget --quiet --timestamping --continue #{shellescape url}} or
-        (puts "error!"; raise StandardError, "Unable to fetch specifications")
+    ["specs", "latest_specs", "prerelease_specs"].each.in_threads do |specs_name|
+      path = "#{specs_name}.#{marshal_version}.gz"
+      uri = URI "#{source}/#{specs_name}.#{marshal_version}.gz"
+      headers = {}
+      headers['If-Modified-Since'] = File.mtime(path).rfc2822 if File.exist? path
+      catch :done do
+        loop do
+          request = Net::HTTP::Get.new uri.path, headers
+          http.request(uri, request) do |response|
+            puts response.inspect
+            if response.code == "304"
+              # Nothing to do, we already have latest version
+              throw :done
+            elsif response.code[0] == "3" and response["Location"]
+              # Redirect
+              url = URI.join uri.to_s, response["Location"]
+            elsif response.code == "206"
+              File.open(path, 'a') do |file|
+                response.read_body do |chunk|
+                  file.write chunk
+                end
+              end
+            elsif response.code == "200"
+              File.open(path, 'w') do |file|
+                response.read_body do |chunk|
+                  file.write chunk
+                end
+              end
+              last_modified = Time.parse response['Last-Modified']
+              File.utime last_modified, last_modified, path
+              throw :done
+            else
+              raise StandardError, "Unknown response: #{response.inspect}"
+            end
+          end
+        end
+      end
     end
     puts "done."
     FileUtils.mkdir_p "gems"
@@ -131,15 +166,42 @@ module Gem
     ["latest_specs", "specs", "prerelease_specs"].each do |specs_name|
       Marshal.load(IO.popen("gunzip -c #{specs_name}.#{marshal_version}.gz", "r", err: nil)).tap do |tuples|
         progress = ProgressBar.new("Mirroring #{specs_name.gsub('_', ' ')}", tuples.length)
-      end.to_enum.in_thread_pool(of: 8) do |tuple|
+      end.each.in_thread_pool(of: 8) do |tuple|
         name, version, platform = tuple
         begin
           specification = Specification.new name: name, version: version, platform: platform
           path = "gems/#{specification.basename}.gem"
           unless File.exist? path and Specification.try_from_gem(path)
-            url = "#{source}/#{path}"
-            system %{wget --quiet --timestamping --continue --directory-prefix=gems #{shellescape url}} or
-              raise StandardError, "Couldn't fetch #{url}"
+            uri = URI "#{source}/#{path}"
+            headers = {}
+            headers["Range"] = "bytes=#{File.size(path)}-" if File.exist? path
+            catch :done do
+              loop do
+                request = Net::HTTP::Get.new uri.path, headers
+                http.request uri, request do |response|
+                  puts response.inspect
+                  if response.code == "304"
+                    # Nothing to do, we already have latest version
+                    throw :done
+                  elsif response.code[0] == "3" and response["Location"]
+                    # Redirect
+                    url = URI.join uri.to_s, response["Location"]
+                  elsif response.code == "200" or response.code == "206"
+                    # TODO: Check range properly
+                    File.open(path, response.code == '206' ? 'a' : 'w') do |file|
+                      response.read_body do |chunk|
+                        file.write chunk
+                      end
+                    end
+                    last_modified = Time.parse response['Last-Modified']
+                    File.utime last_modified, last_modified, path
+                    throw :done
+                  else
+                    raise StandardError, "Unknown response: #{response.inspect}"
+                  end
+                end
+              end
+            end
             progress.puts specification.basename
           end
         rescue StandardError

@@ -4,18 +4,23 @@ class ThreadPool
   def initialize size=4
     @size = size
     @queue = SizedQueue.new 1
+    @queue_mutex = Mutex.new
     @threads = @size.times.map { Thread.new &method(:worker) }
   end
 
   def enqueue *arguments, &work
-    @queue << [work, arguments]
+    @queue_mutex.synchronize do
+      @queue << [work, *arguments]
+    end
   end
 
   def join
-    @queue << nil
-    @threads.each do |thread|
-      thread[:mutex].synchronize do
-        thread.kill
+    @queue_mutex.synchronize do
+      @queue << nil
+      @threads.each do |thread|
+        thread[:mutex].synchronize do
+          thread.kill
+        end
       end
     end
   end
@@ -25,8 +30,8 @@ private
   def worker
     mutex = Thread.current[:mutex] = Mutex.new
     loop do
-      mutex.synchronize do
-        if work = @queue.shift
+      if work = @queue.shift
+        mutex.synchronize do
           work.shift.call *work
         end
       end
@@ -34,22 +39,12 @@ private
   end
 end
 
-module Enumerable
-  def in_thread_pool size=4, &block
-    to_enum.in_thread_pool size, &block
-  end
-
-  def in_threads &block
-    to_enum.in_threads &block
-  end
-end
-
-class Enumerator
+module ThreadPoolable
   def in_thread_pool size=4, &block
     size = size[:of] if size.is_a? Hash
     pool = ThreadPool.new size
     each do |*args|
-      pool.enqueue { block.call *args }
+      pool.enqueue *args, &block
     end
     pool.join
   end
@@ -60,3 +55,5 @@ class Enumerator
     end.each(&:join)
   end
 end
+
+Enumerator.send :include, ThreadPoolable
