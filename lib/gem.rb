@@ -235,7 +235,9 @@ protected
   end
 end
 
+require 'gem/tar'
 require 'gem/thread_poolable'
+
 require 'gem/configuration'
 require 'gem/version'
 require 'gem/requirement'

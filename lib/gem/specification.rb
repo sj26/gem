@@ -9,7 +9,12 @@ class Gem::Specification
     :rubygems_version, :specification_version, :summary, :test_files, :version
 
   def self.from_gem path
-    YAML.load_stream(Zlib::GzipReader.new(IO.popen("tar -Oxf #{Gem.shellescape path} metadata.gz", "r"))) rescue nil
+    Gem::Tar::Reader.new(File.open(path, 'r')).each do |entry|
+      if entry.full_name == "metadata.gz" or entry.full_name == "metadata"
+        entry = Zlib::GzipReader.new entry if entry.full_name =~ /\.gz\Z/
+        return YAML.load_stream entry
+      end
+    end
   end
 
   def self.try_from_gem path
