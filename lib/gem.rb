@@ -1,5 +1,6 @@
 require 'fileutils'
 require 'net/http/persistent'
+require 'rbconfig'
 require 'time'
 require 'yaml'
 require 'zlib'

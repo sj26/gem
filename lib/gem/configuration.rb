@@ -1,5 +1,3 @@
-require 'rbconfig'
-
 module Gem::Configuration
   def sources
     @sources ||= %w(http://rubygems.org)

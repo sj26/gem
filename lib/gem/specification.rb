@@ -1,9 +1,7 @@
-require 'yaml'
-require 'zlib'
-
 class Gem::Specification
   include Comparable
 
+  # We override some of these later
   attr_accessor :authors, :autorequire, :bindir, :date, :default_executable, :dependencies,
     :description, :email, :executables, :extensions, :extra_rdoc_files, :files, :has_rdoc,
     :homepage, :licenses, :name, :platform, :rdoc_options, :require_paths,
