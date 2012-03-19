@@ -121,9 +121,8 @@ module Gem
     print "#{File.exist? "specs.#{marshal_version}.gz" and "Updating" or "Fetching"} specifications... "
     ["specs", "latest_specs", "prerelease_specs"].map do |specs_name|
       "#{source}/#{specs_name}.#{marshal_version}.gz"
-    end.each do |url|
-      # XXX: `--retry-connrefused`: HKG might reconnect occasionally
-      system %{wget --quiet --timestamping --continue --retry-connrefused #{shellescape url}} or
+    end.in_threads do |url|
+      system %{wget --quiet --timestamping --continue #{shellescape url}} or
         (puts "error!"; raise StandardError, "Unable to fetch specifications")
     end
     puts "done."
@@ -139,12 +138,9 @@ module Gem
           path = "gems/#{specification.basename}.gem"
           unless File.exist? path and Specification.try_from_gem(path)
             url = "#{source}/#{path}"
-            # XXX: `--retry-connrefused`: HKG might reconnect occasionally
-            system %{wget --quiet --timestamping --continue --retry-connrefused --directory-prefix=gems #{shellescape url}} or
+            system %{wget --quiet --timestamping --continue --directory-prefix=gems #{shellescape url}} or
               raise StandardError, "Couldn't fetch #{url}"
             progress.puts specification.basename
-            # XXX: HKG doesn't like too much traffic
-            sleep 1
           end
         rescue StandardError
           progress.puts "Failed to mirror gem #{name.inspect}: #{$!}", $!.inspect, $!.backtrace
