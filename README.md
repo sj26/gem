@@ -2,6 +2,8 @@
 
 Just enough not-Rubygems to index a collection of gems for download... and maybe more.
 
+There are some severe caveats. Some are by design, others will be addressed later.
+
 Created by [Samuel Cochran](http://sj26.com) for [Railscamp X](http://railscamps.com).
 
 ## Thoughts
