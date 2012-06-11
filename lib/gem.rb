@@ -6,6 +6,20 @@ require 'yaml'
 require 'zlib'
 
 module Gem
+end
+
+require 'gem/tar'
+require 'gem/thread_poolable'
+require 'gem/configuration'
+require 'gem/version'
+require 'gem/requirement'
+require 'gem/dependency'
+require 'gem/platform'
+require 'gem/specification'
+require 'gem/progressbar'
+require 'gem/require'
+
+module Gem
   VERSION = '1.8.11'.freeze
 
   # XXX: Find methods not implemented yet
@@ -234,16 +248,3 @@ protected
     end
   end
 end
-
-require 'gem/tar'
-require 'gem/thread_poolable'
-
-require 'gem/configuration'
-require 'gem/version'
-require 'gem/requirement'
-require 'gem/dependency'
-require 'gem/platform'
-require 'gem/specification'
-require 'gem/progressbar'
-
-require 'gem/require'
