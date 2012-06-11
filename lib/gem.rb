@@ -17,7 +17,6 @@ require 'gem/dependency'
 require 'gem/platform'
 require 'gem/specification'
 require 'gem/progressbar'
-require 'gem/require'
 
 module Gem
   VERSION = '1.8.11'.freeze
