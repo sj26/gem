@@ -64,8 +64,8 @@ module Gem
             index.gems << specification
             yield specification if block_given?
           end
-        rescue StandardError
-          puts "Failed to load gem #{name.inspect}: #{$!}", $!.inspect, $!.backtrace
+        rescue StandardError => ex
+          puts "Loading #{name} failed: #{name.inspect}: #{ex.class}: #{ex.message}", ex.backtrace
         end
         progress.inc
       end
