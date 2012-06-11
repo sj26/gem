@@ -25,8 +25,7 @@ class Gem::Specification
 
   def self.from_gem path
     from_gem! path
-  rescue Exception => ex
-    # XXX: YAML throws `SyntaxError`s (eek!)
+  rescue Exception => ex # XXX: YAML throws `SyntaxError`s (eek!)
     STDERR.puts "Error loading #{path}: #{ex.class}: #{ex.message}"
   end
 
