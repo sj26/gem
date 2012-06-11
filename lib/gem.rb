@@ -15,6 +15,7 @@ require 'gem/version'
 require 'gem/requirement'
 require 'gem/dependency'
 require 'gem/platform'
+require 'gem/source_index'
 require 'gem/specification'
 require 'gem/progressbar'
 
