@@ -60,7 +60,7 @@ module Gem
         progress = ProgressBar.new("Loading index", names.length)
       end.each do |name|
         begin
-          if specification = self[name].for_cache!
+          if specification = Specification.from_gem("gems/#{name}").for_cache!
             index.gems << specification
             yield specification if block_given?
           end
