@@ -67,7 +67,7 @@ class Gem::Specification
   end
 
   def prerelease?
-    version.is_a? Version and version.prerelease?
+    version.is_a? Gem::Version and version.prerelease?
   end
 
   def platform
