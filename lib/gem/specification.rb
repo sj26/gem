@@ -9,12 +9,18 @@ class Gem::Specification
     :rubygems_version, :specification_version, :summary, :test_files, :version
 
   def self.from_gem! path
+    data = nil
     Gem::Tar::Reader.new(File.open(path, 'r')).each do |entry|
-      if entry.full_name == "metadata.gz" or entry.full_name == "metadata"
-        entry = Zlib::GzipReader.new entry if entry.full_name =~ /\.gz\Z/
-        return YAML.load entry.read
+      data = if entry.full_name == "metadata.gz"
+        reader = Zlib::GzipReader.new(entry)
+        reader.read.tap {
+          reader.close
+        }
+      elsif entry.full_name == "metadata"
+        entry.read
       end
     end
+    YAML.load(data) unless data.nil?
   end
 
   def self.from_gem path
