@@ -186,7 +186,7 @@ module Gem
         begin
           specification = Specification.new name: name, version: version, platform: platform
           path = "gems/#{specification.basename}.gem"
-          unless File.exist? path and Specification.try_from_gem(path)
+          unless File.exist? path and Specification.from_gem(path)
             uri = URI "#{source}/#{path}"
             headers = {}
             headers["Range"] = "bytes=#{File.size(path)}-" if File.exist? path

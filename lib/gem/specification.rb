@@ -8,7 +8,7 @@ class Gem::Specification
     :required_ruby_version, :required_rubygems_version, :requirements, :rubyforge_project,
     :rubygems_version, :specification_version, :summary, :test_files, :version
 
-  def self.from_gem path
+  def self.from_gem! path
     Gem::Tar::Reader.new(File.open(path, 'r')).each do |entry|
       if entry.full_name == "metadata.gz" or entry.full_name == "metadata"
         entry = Zlib::GzipReader.new entry if entry.full_name =~ /\.gz\Z/
@@ -17,12 +17,11 @@ class Gem::Specification
     end
   end
 
-  def self.try_from_gem path
-    begin
-      from_gem path
+  def self.from_gem path
+    from_gem! path
+  rescue Exception => ex
     # XXX: YAML throws `SyntaxError`s (eek!)
-    rescue Exception
-    end
+    STDERR.puts "Error loading #{path}: #{ex.class}: #{ex.message}"
   end
 
   @@capture = false
