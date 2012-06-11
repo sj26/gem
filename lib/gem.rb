@@ -109,31 +109,28 @@ module Gem
     # un-gzipped indexes are deprecated, so generate gzipped directly:
 
     print "Writing specs... "
-    Marshal.dump(all.gems.reject(&:prerelease?).map do |specification|
-      platform = specification.platform
-      platform = "ruby" if platform.nil? or platform.empty?
-      [specification.name, specification.version, platform]
-    end, Zlib::GzipWriter.new(File.open("specs.#{marshal_version}.gz", "w")))
+    write_specs! all.gems.reject(&:prerelease?), "specs.#{marshal_version}.gz"
     puts "done."
 
     print "Writing lastest_specs... "
-    Marshal.dump(all.gems.group_by(&:name).map do |name, specifications|
-      specification = specifications.reject(&:prerelease?).last
-      platform = specification.platform
-      platform = "ruby" if platform.nil? or platform.empty?
-      [specification.name, specification.version, platform]
-    end, Zlib::GzipWriter.new(File.open("latest_specs.#{marshal_version}.gz", "w")))
+    write_specs! latest_specs(all.gems), "latest_specs.#{marshal_version}.gz"
     puts "done."
 
     print "Writing prerelease_specs... "
-    Marshal.dump(all.gems.select(&:prerelease?).map do |specification|
-      platform = specification.platform
-      platform = "ruby" if platform.nil? or platform.empty?
-      [specification.name, specification.version, platform]
-    end, Zlib::GzipWriter.new(File.open("prerelease_specs.#{marshal_version}.gz", "w")))
+    write_specs! all.gems.select(&:prerelease?), "prerelease_specs.#{marshal_version}.gz"
     puts "done."
 
     # TODO: index.rss
+  end
+
+  def self.latest_specs spec_list
+    spec_list.group_by(&:name).map {|name, specs|
+      specs.reject(&:prerelease?).sort.last
+    }
+  end
+
+  def self.write_specs! spec_list, filename
+    File.write(filename, Zlib.deflate(Marshal.dump(spec_list.map(&:to_tuple))))
   end
 
   def self.mirror source=source

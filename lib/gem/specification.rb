@@ -84,6 +84,15 @@ class Gem::Specification
     @platform = value
   end
 
+  def to_tuple
+    platform_for_tuple = if platform.nil? || platform.empty?
+      'ruby'
+    else
+      platform
+    end
+    [name, version, platform_for_tuple]
+  end
+
   def basename
     @basename ||= [name, version, platform].map(&:to_s).reject(&:empty?).compact.join('-')
   end
