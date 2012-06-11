@@ -67,7 +67,7 @@ class Gem::Version
     "<Gem::Version #{to_s.inspect}>"
   end
 
-  def to_yaml
+  def to_yaml_properties
     [:@version]
   end
 end
