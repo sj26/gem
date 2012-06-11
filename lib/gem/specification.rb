@@ -12,7 +12,7 @@ class Gem::Specification
     Gem::Tar::Reader.new(File.open(path, 'r')).each do |entry|
       if entry.full_name == "metadata.gz" or entry.full_name == "metadata"
         entry = Zlib::GzipReader.new entry if entry.full_name =~ /\.gz\Z/
-        return YAML.load_stream entry
+        return YAML.load entry.read
       end
     end
   end
