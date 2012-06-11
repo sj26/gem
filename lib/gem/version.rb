@@ -8,7 +8,7 @@ class Gem::Version
   end
 
   def version= value
-    @segments = @prelease = nil
+    @segments = @prerelease = nil
     @version = value
   end
 
