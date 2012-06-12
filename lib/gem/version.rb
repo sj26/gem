@@ -60,7 +60,7 @@ class Gem::Version
   end
 
   def to_s
-    version
+    version.to_s
   end
 
   def inspect
