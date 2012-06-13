@@ -130,7 +130,9 @@ module Gem
   end
 
   def self.write_specs! spec_list, filename
-    File.write(filename, Zlib.deflate(Marshal.dump(spec_list.map(&:to_tuple))))
+    Zlib::GzipWriter.open(filename) do |gz|
+      gz.write(Marshal.dump(spec_list.map(&:to_tuple)))
+    end
   end
 
   def self.mirror source=source
