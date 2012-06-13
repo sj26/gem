@@ -11,7 +11,7 @@ class Gem::Specification
   def self.from_gem! path
     data = nil
     Gem::Tar::Reader.new(File.open(path, 'r')).each do |entry|
-      data = if entry.full_name == "metadata.gz"
+      data ||= if entry.full_name == "metadata.gz"
         reader = Zlib::GzipReader.new(entry)
         reader.read.tap {
           reader.close
