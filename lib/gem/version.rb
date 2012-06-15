@@ -13,7 +13,9 @@ class Gem::Version
   end
 
   def segments
-    @segments ||= version.to_s.split('.')
+    @segments ||= version.to_s.split('.').map {|piece|
+      piece[/^\d+$/] ? piece.to_i : piece
+    }
   end
 
   def prerelease?
@@ -24,27 +26,21 @@ class Gem::Version
     return unless self.class === other
     return 0 if version == other.version
 
-    lhsegments = segments
-    rhsegments = other.segments
+    max_length = [segments.length, other.segments.length].max
+    (0...max_length).to_a.each {|index|
+      result = compare_pieces segments[index], other.segments[index]
+      return result unless result == 0
+    }
 
-    lhsize = lhsegments.size
-    rhsize = rhsegments.size
-    limit  = (lhsize > rhsize ? lhsize : rhsize) - 1
+    0
+  end
 
-    i = 0
-
-    while i <= limit
-      lhs, rhs = lhsegments[i] || 0, rhsegments[i] || 0
-      i += 1
-
-      next      if lhs == rhs
-      return -1 if String  === lhs && Numeric === rhs
-      return  1 if Numeric === lhs && String  === rhs
-
-      return lhs <=> rhs
+  def compare_pieces this, that
+    if this.is_a?(String) ^ that.is_a?(String)
+      this.is_a?(String) ? -1 : 1
+    else
+      (this || 0) <=> (that || 0)
     end
-
-    return 0
   end
 
   def marshal_dump
