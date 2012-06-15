@@ -60,9 +60,7 @@ module Gem
         progress = ProgressBar.new("Loading index", names.length)
       end.each do |name|
         begin
-          if File.exists?("quick/#{name}spec.rz")
-            index.gems << YAML.load(Zlib.inflate(File.read("quick/#{name}spec.rz")))
-          elsif specification = Specification.from_gem("gems/#{name}")
+          if specification = Specification.from_gem("gems/#{name}")
             index.gems << specification.for_cache!
             yield specification if block_given?
           end
