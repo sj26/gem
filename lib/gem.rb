@@ -89,23 +89,6 @@ module Gem
     File.write("Marshal.#{marshal_version}.Z", Zlib.deflate(Marshal.dump(all.gems.map { |spec| [spec.basename, spec] })))
     puts "done."
 
-    # deprecated: Marshal.dump(all, File.open("Marshal.#{marshal_version}", "w"))
-
-    # deprecated:
-    #puts "Quick index"
-    #File.open('quick/index', 'w') do |quick_index|
-    #  all.gems.each do |specification|
-    #    quick_index.write("#{specification.name.to_s}-#{specification.version.version}\n")
-    #  end
-    #end
-
-    # deprecated:
-    #puts "Master index"
-    #YAML.dump(all, File.open("yaml", "w"))
-    #File.write("yaml.Z", Zlib.deflate(File.read("yaml")))
-
-    # un-gzipped indexes are deprecated, so generate gzipped directly:
-
     print "Writing specs... "
     write_specs! all.gems.reject(&:prerelease?), "specs.#{marshal_version}.gz"
     puts "done."
