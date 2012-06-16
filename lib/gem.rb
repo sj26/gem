@@ -106,8 +106,8 @@ module Gem
   end
 
   def self.latest_specs spec_list
-    spec_list.group_by(&:name).map {|name, specs|
-      specs.reject(&:prerelease?).sort.last
+    spec_list.group_by(&:name).flat_map { |name, specs|
+      specs.reject(&:prerelease?).group_by(&:platform).values.map(&:sort).map(&:last)
     }
   end
 
