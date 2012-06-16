@@ -24,8 +24,7 @@ module Gem
 
   # XXX: Find methods not implemented yet
   def self.method_missing symbol, *args
-    # XXX: WHUT, why doesn't "[athing]"[1, -1] not give "athing"? Grr.
-    puts "TODO: #{name}.#{symbol}(#{args.inspect.tap { |s| s.slice!(0, 1); s.slice!(-1) } })"
+    puts "TODO: #{name}.#{symbol}(#{args.inspect[1...-1]})"
   end
 
   def self.[] name, version=nil, platform=nil
