@@ -82,7 +82,9 @@ module Gem
   def self.index
     FileUtils.mkdir_p "quick/Marshal.#{marshal_version}"
 
+    print "Quick index... "
     all(&method(:quick_index))
+    puts "done."
 
     print "Marshal index... "
     File.write("Marshal.#{marshal_version}.Z", Zlib.deflate(Marshal.dump(all.gems.map { |spec| [spec.basename, spec] })))
