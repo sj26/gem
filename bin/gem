@@ -2,6 +2,6 @@
 
 require 'gem'
 
-raise ArgumentError, "Bad command" unless Gem.respond_to? ARGV.first
+raise ArgumentError, "Bad command" if ARGV.first.nil? or not Gem.respond_to? ARGV.first
 
 Gem.public_send ARGV.shift, *ARGV
