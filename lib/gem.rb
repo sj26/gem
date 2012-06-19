@@ -129,7 +129,6 @@ module Gem
         loop do
           request = Net::HTTP::Get.new uri.path, headers
           http.request(uri, request) do |response|
-            puts response.inspect
             if response.code == "304"
               # Nothing to do, we already have latest version
               throw :done
@@ -177,7 +176,6 @@ module Gem
               loop do
                 request = Net::HTTP::Get.new uri.path, headers
                 http.request uri, request do |response|
-                  puts response.inspect
                   if response.code == "304"
                     # Nothing to do, we already have latest version
                     throw :done
