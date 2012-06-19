@@ -134,7 +134,7 @@ module Gem
               throw :done
             elsif response.code[0] == "3" and response["Location"]
               # Redirect
-              url = URI.join uri.to_s, response["Location"]
+              uri = URI.join uri.to_s, response["Location"]
             elsif response.code == "206"
               File.open(path, 'a') do |file|
                 response.read_body do |chunk|
@@ -181,7 +181,7 @@ module Gem
                     throw :done
                   elsif response.code[0] == "3" and response["Location"]
                     # Redirect
-                    url = URI.join uri.to_s, response["Location"]
+                    uri = URI.join uri.to_s, response["Location"]
                   elsif response.code == "200" or response.code == "206"
                     # TODO: Check range properly
                     File.open(path, response.code == '206' ? 'a' : 'w') do |file|
