@@ -46,12 +46,8 @@ module Gem
     Specification.from_gem filename
   end
 
-  def self.all
-    # If we have an index, run the block if given
-    @index.gems.each(&proc) if block_given? and @index
-
-    # Otherwise build the index and run the block for each built spec
-    @index ||= SourceIndex.new.tap do |index|
+  def self.load_from_gems
+    SourceIndex.new.tap do |index|
       progress = nil
       Dir.foreach("gems").select do |path|
         path =~ /\.gem\Z/
@@ -74,35 +70,69 @@ module Gem
     end
   end
 
-  def self.quick_index specification
-    File.write("quick/#{specification.basename}.gemspec.rz", Zlib.deflate(YAML.dump(specification)))
-    File.write("quick/Marshal.#{marshal_version}/#{specification.basename}.gemspec.rz", Zlib.deflate(Marshal.dump(specification)))
+  def self.load_from_marshal
+    SourceIndex.new.tap do |index|
+      progress = nil
+      Marshal.load(Zlib.inflate(File.read("Marshal.#{marshal_version}.Z"))).tap do |tuples|
+        progress = ProgressBar.new("Loading index", tuples.length)
+      end.each do |(name, specification)|
+        index.gems << specification
+        yield specification if block_given?
+      end
+      progress.finish
+      puts "#{index.gems.length} gems loaded into index"
+      index.gems.sort!
+    end
+  end
+
+  def self.all(&block)
+    if @index
+      @index.gems.each(&block)
+    else
+      @index = load_from_marshal(&block)
+    end
   end
 
   def self.index
-    FileUtils.mkdir_p "quick/Marshal.#{marshal_version}"
+    index_marshal
+    index_quick
+    index_specs
+    index_latest_specs
+    index_prerelease_specs
+  end
 
-    print "Quick index... "
-    all(&method(:quick_index))
-    puts "done."
-
+  def self.index_marshal gems=nil
     print "Marshal index... "
-    File.write("Marshal.#{marshal_version}.Z", Zlib.deflate(Marshal.dump(all.gems.map { |spec| [spec.basename, spec] })))
+    File.write("Marshal.#{marshal_version}.Z", Zlib.deflate(Marshal.dump(load_from_gems.gems.map { |spec| [spec.basename, spec] })))
     puts "done."
+  end
 
+  def self.index_quick
+    print "Quick index... "
+    FileUtils.mkdir_p "quick/Marshal.#{marshal_version}"
+    all do |specification|
+      File.write("quick/#{specification.basename}.gemspec.rz", Zlib.deflate(YAML.dump(specification)))
+      File.write("quick/Marshal.#{marshal_version}/#{specification.basename}.gemspec.rz", Zlib.deflate(Marshal.dump(specification)))
+    end
+    puts "done."
+  end
+
+  def self.index_specs gems=nil
     print "Writing specs... "
-    write_specs! all.gems.reject(&:prerelease?), "specs.#{marshal_version}.gz"
+    write_specs all.gems.reject(&:prerelease?), "specs.#{marshal_version}.gz"
     puts "done."
+  end
 
-    print "Writing lastest_specs... "
-    write_specs! latest_specs(all.gems), "latest_specs.#{marshal_version}.gz"
+  def self.index_latest_specs gems=nil
+    print "Writing specs... "
+    write_specs latest_specs(all.gems), "latest_specs.#{marshal_version}.gz"
     puts "done."
+  end
 
-    print "Writing prerelease_specs... "
-    write_specs! all.gems.select(&:prerelease?), "prerelease_specs.#{marshal_version}.gz"
+  def self.index_prerelease_specs gems=nil
+    print "Writing prerelease specs... "
+    write_specs all.gems.select(&:prerelease?), "prerelease_specs.#{marshal_version}.gz"
     puts "done."
-
-    # TODO: index.rss
   end
 
   def self.latest_specs spec_list
@@ -111,7 +141,7 @@ module Gem
     }
   end
 
-  def self.write_specs! spec_list, filename
+  def self.write_specs spec_list, filename
     Zlib::GzipWriter.open(filename) do |gz|
       gz.write(Marshal.dump(spec_list.map(&:to_tuple)))
     end
@@ -129,7 +159,7 @@ module Gem
         loop do
           request = Net::HTTP::Get.new uri.path, headers
           http.request(uri, request) do |response|
-            if response.code == "304"
+            if response.code == "304" or response.code == "416"
               # Nothing to do, we already have latest version
               throw :done
             elsif response.code[0] == "3" and response["Location"]

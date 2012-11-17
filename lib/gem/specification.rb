@@ -8,6 +8,10 @@ class Gem::Specification
     :required_ruby_version, :required_rubygems_version, :requirements, :rubyforge_project,
     :rubygems_version, :specification_version, :summary, :test_files, :version
 
+  def today
+    @@today ||= Date.today
+  end
+
   def self.from_gem! path
     data = nil
     Gem::Tar::Reader.new(File.open(path, 'r')).each do |entry|
@@ -58,7 +62,7 @@ class Gem::Specification
 
   def name= value
     @basename = nil
-    @name = value
+    @name = value.to_s
   end
 
   def version
