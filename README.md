@@ -33,34 +33,24 @@ Given the following definitions:
  * `<basename>`: `<name>-<version>[-<platform>]`
    * `<name>`: gem name, i.e. "rails"
    * `<version>`: gem version, i.e. "3.2.2"
-   * `<platform>`: gem platform, omittted if platform is "ruby", the default
+   * `<platform>`: gem platform, omitted if platform is "ruby", the default
 
 Proposed directory structure:
 
- * `cache/` -> `gems/` — a symlink for old gemball location, backwards compat only.
- * `index/` — index of gemspecs.
-   * All gemspec indexes are stored as simple tuples, `[[<name>, <version>, <platform>[, <yanked?>]]+]`
-     * Journalled (append-only).
-     * Yanked gems add another entry with <yanked?> set to true.
-   * `specs.json[.gz]` — index of all (non-prerelease) gemspecs
-   * `latest_specs.json[.gz]` — index of latest (non-prerelease) gemspec
-   * `prerelease_specs.json[.gz] — index of all (non-prerelease) gemspecs ([[name, version, platform]*]), journalled.
-   * `<name>/` — gem name specific indexes
-     * `specs.json[.gz]` — index of gemspecs for a gem name (for complex requirement resolution)
-     * `latest_specs.json[.gz]` — latest gemspec for each platform for a gem name (`gem install <name>`)
-     * `prerelease_specs.json[.gz]` — latest prerelease gemspec for each platform for a gem name (`gem install —prerelease <name>`)
-     * eventually, we might need to replicate by version segment for targeted requirements if it would provide efficiency gains — gems with many semantic versions, etc:
-       `version-<version-prefix>/{specs,latest_specs,prerelease_specs}.json.gz`
-     * could also introduce something for platform, ala:
-       `version-<version-prefix>/]platform-<platform>/`
- * `sources/` — cached source indexes
-   * `<source-sha>/` — SHA of source URL (i.e. `http://rubygems.org`)
-     * `index/` — a cache of the top-level index/ for a particular source
- * `gems/` — installed gems, backwards compatible.
-   * `<basename>.gem` — the gem ball
-   * `<basename>/` — the unpacked gem tree
- * `specifications/` — gem specifications of installed gems, backwards compatible.
-   * `<basename>.gemspec` — ruby format, without file/test lists
+ * `metadata.index` — newline separated list of all names, append only.
+ * `metadata/` — index of gems.
+   * `<name>.index` — newline separated list of all basenames for a name, append only.
+   * `<name>/` -
+     * `<version>[-<platform>].json` – metadata for the gemball.
+ * `source.json` — metadata about this source. May contain canonical URL.
+ * `sources/` — cached source indexes.
+   * `<source-sha>/` — SHA of canonical source URL (i.e. `http://rubygems.org`)
+     * `source.json` — metadata about the source.
+     * `metadata.index/` — a cache of the top-level metadata.index for the source
+     * `metadata/` — a cache of the top-level metadata/ for the source
+ * `gems/` — gemballs and unpacked trees.
+   * `<basename>.gem` — the gemball.
+   * `<basename>/` — the unpacked gem tree. Optional if it allows zip loading.
 
 Use net/http/persistent per-source for gem operations like rubygems-mirror, respecting HTTP content-type, transport-encoding (compression), range and freshness controls, and negating overhead of many small files.
 
