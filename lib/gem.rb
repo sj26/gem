@@ -161,7 +161,7 @@ module Gem
     FileUtils.mkdir_p "gems"
     progress = nil
     ["latest_specs", "specs", "prerelease_specs"].each do |specs_name|
-      Marshal.load(IO.popen("gunzip -c #{specs_name}.#{marshal_version}.gz", "r", err: nil)).tap do |tuples|
+      Marshal.load(IO.popen("gunzip -c #{specs_name}.#{marshal_version}.gz", "r", err: "/dev/null")).tap do |tuples|
         progress = ProgressBar.new("Mirroring #{specs_name.gsub('_', ' ')}", tuples.length)
       end.each.in_thread_pool(of: 8) do |tuple|
         name, version, platform = tuple
