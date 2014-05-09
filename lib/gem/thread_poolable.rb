@@ -1,41 +1,91 @@
 require 'thread'
 
 class ThreadPool
-  def initialize size=4
-    @size = size
-    @queue = SizedQueue.new 1
-    @queue_mutex = Mutex.new
-    @threads = @size.times.map { Thread.new &method(:worker) }
+  class Worker
+    def initialize
+      @mutex = Mutex.new
+      @thread = Thread.new do
+        while true
+          sleep 0.001
+          block = get_block
+          if block
+            block.call
+            reset_block
+          end
+        end
+      end
+    end
+
+    def get_block
+      @mutex.synchronize { @block }
+    end
+
+    def set_block(block)
+      @mutex.synchronize do
+        raise RuntimeError, "Thread already busy." if @block
+        @block = block
+      end
+    end
+
+    def reset_block
+      @mutex.synchronize { @block = nil }
+    end
+
+    def busy?
+      @mutex.synchronize { !@block.nil? }
+    end
+
+    def free?
+      !busy?
+    end
   end
 
-  def enqueue *arguments, &work
-    @queue_mutex.synchronize do
-      @queue << [work, *arguments]
-    end
+  attr_accessor :max_size
+  attr_reader :workers
+
+  def initialize(max_size = 10)
+    @max_size = max_size
+    @workers = []
+    @mutex = Mutex.new
+  end
+
+  def size
+    @mutex.synchronize { @workers.size }
+  end
+
+  def busy?
+    @mutex.synchronize { @workers.any?(&:busy?) }
   end
 
   def join
-    @queue_mutex.synchronize do
-      @queue << nil
-      @threads.each do |thread|
-        thread[:mutex].synchronize do
-          thread.kill
-        end
-      end
+    sleep 0.01 while busy?
+  end
+
+  def process(&block)
+    wait_for_worker.set_block(block)
+  end
+
+  def wait_for_worker
+    while true
+      worker = find_available_worker
+      return worker if worker
+      sleep 0.01
     end
   end
 
-private
+  def find_available_worker
+    @mutex.synchronize { free_worker || create_worker }
+  end
 
-  def worker
-    mutex = Thread.current[:mutex] = Mutex.new
-    loop do
-      if work = @queue.shift
-        mutex.synchronize do
-          work.shift.call *work
-        end
-      end
-    end
+  def free_worker
+    @workers.find(&:free?)
+  end
+
+  def create_worker
+    return nil if @workers.size >= @max_size
+    worker = Worker.new
+    @workers << worker
+    worker
   end
 end
 
@@ -44,7 +94,9 @@ module ThreadPoolable
     size = size[:of] if size.is_a? Hash
     pool = ThreadPool.new size
     each do |*args|
-      pool.enqueue *args, &block
+      pool.process do
+        block.call(*args)
+      end
     end
     pool.join
   end
